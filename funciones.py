@@ -13,111 +13,87 @@ def ordenMJD(filename,opcion,base,orden):
     import sigproc
     from peakutils import baseline
 
-#abrimos los canales
-
     header = sigproc.read_header(filename)
     f=open(filename,"rb")
-    nchans = int(header[0].get("nchans"))
-    f.seek(header[1]) # le dice a la estructura f que ubique al puntero en una cierta pos
+    nchans = int(header[0].get("nchans"))   # numero de canales
+    f.seek(header[1])                       # le dice a la estructura f que ubique al puntero en una cierta posicion
 
+    # abrimos el archivo con los valores de tiempo ltf.
+    time_name = filename[0:len(filename)-4]+'.ltf'  # nombre del archivo .ltf
+    time_file = open(time_name, "r")                 # abre el archivo .ltf
 
+    # abrimos el archivo con las posiciones de apuntamiento
+    pos_name = filename[0:len(filename)-4]+'.txt'
+    pos_file = open(pos_name, "r")
 
-    # abre el archivo con los valores de tiempo ltf.
-    time_fil=filename[0:len(filename)-4]+'.ltf'  # nombre del archivo .ltf
-    time_file=open(time_fil,"r")                 # abre el archivo .ltf}
-
-    pos_fil = filename[0:len(filename)-4]+'.txt'
-    pos_file = open(pos_fil,"r")
-
-    MJD_pos = np.loadtxt(pos_fil, usecols=0) #guardas en el array lo que esta en eL pos_file en la columna cero
-    RA_pos = np.loadtxt(pos_fil,usecols=5) #guardamos los datos de ascencion recta de la 5ta columna
-    DEC_pos = np.loadtxt(pos_fil, usecols=7) #lo mismo pero de la declinacion en la 7ma col
+    MJD_pos = np.loadtxt(pos_name, usecols=0)   # guardamos los valores de MJD de .txt
+    RA_pos = np.loadtxt(pos_name, usecols=5)     # guardamos los valores de RA de .txt
+    DEC_pos = np.loadtxt(pos_name, usecols=7)   # guardamos los valores de DEC de .txt
 
     b = os.path.getsize(filename)
-    size=int(header[0].get("nbits"))      # del header saca el tamaño en bits
-    pack=size/8
-    espectros=(((b-header[1])/pack)/nchans)-1 #Calculo del total de espectos disponibles en# el FIL
+    size = int(header[0].get("nbits"))          # del header saca el tamaño en bits
+    pack = size/8
+    espectros = (((b-header[1])/pack)/nchans)-1 # Calculo del total de espectos disponibles en# el FIL
+
     RA_pos_FILTRADO = []
     DEC_pos_FILTRADO = []
+
     #crear el array con las dimensiones y "rellenarlo" con los datos que estan en los archivos
+    ltf_fil = np.empty([0,nchans+3])            # archivo de salida. Las columnas son: MJD, RA, DEC, y luego vienen los canales
+    potencias = np.empty([0,2])                 # archivo de salida si piden potencia
 
-    #con esto completamos la primera columna con los tiempos
-    ltf_fil= np.empty([0,nchans+1])
-    potencias = np.empty([0,2])
+    t0 = MJD_pos[0]                             # primer valor de tiempo del .txt
+    for i in range(espectros):                  # para cada instante de observación
+        t_aux=str(time_file.readline())[0:26]   # sacamos el valor de tiempo del .ltf (dd/mm/yyyy)
+        t1 = Time(t_aux, format='isot').mjd     # y lo pasamos a MJD
 
+        if t1 > t0:                             # si t1 es mayor que to
 
-    t0 = MJD_pos[0]
-    for i in range(espectros):
-        t_aux=str(time_file.readline())[0:26]
-        t1 = Time(t_aux, format='isot').mjd
-
-        if t1 > t0:  # luego definimos un afila auxiliar que le queremos agregar despues con una sola fila y tantas columnas como canales +1
-
-            for t2 in MJD_pos:
+            for t2 in MJD_pos:                  # buscamos el t2 del .txt que le siga a t1
                 if t2 < t1:
                     continue
                 if t2 > t1:
 
-                    fila_aux = np.empty([1,nchans+1])
-                    fila_aux[0, 0] = t1 #aqui guardamos el mjd en la primera col de la fila_aux
-                    #RA_pos_FILTRADO.append(RA_pos[np.argwhere(abs(MJD_pos-t1) < 8.E-7)[0]][0])
-                    RA_pos_FILTRADO.append(RA_pos[np.argwhere(MJD_pos==t0)[0]][0])
-#ACA ESTA EL PROBLEMA, CON EL CRITERIO DEL MATCH, SI USAMOS UNA TOLERANCIA CHICA NO HAY Y SI ES MUY GRANDE HAY DEMASIADOS Y MANDA A TODOS A LA MISMA RA
-                    DEC_pos_FILTRADO.append(DEC_pos[np.argwhere(MJD_pos==t0) [0]][0])
-                    #para cada canal desempacamos lo que habia en c/u y lo metemos en el resto de las columnas
+                    fila_aux = np.empty([1,nchans+3])    # creamos una fila auxiliar que sumar al archivo de salid
+                    fila_aux[0, 0] = t1                                         # en la primera columna guardamos el t del .fil
+                    fila_aux[0, 1] = RA_pos[np.argwhere(MJD_pos==t2)[0]][0]     # en la segunda columna guardamos el RA del .txt
+                    fila_axu[0, 2] = DEC_pos[np.argwhere(MJD_pos==t2) [0]][0]   # en la tercera columna guardamos el DEC del .txt
+
                     for j in range(nchans):
-                        fila_aux[0,j+1]= struct.unpack('f', f.read(pack))[0]
+                        fila_aux[0,j+3]= struct.unpack('f', f.read(pack))[0]    # cargamos las medidas en cada canal de frecuencia para ese instante
 
-                    t0 = t2
-
-                    if base == 1:#calculamos la base y luego se la sacamos.
-                        baseline_values = baseline(fila_aux[0,1:])
-                        fila_aux[0,1:] -= baseline_values
-                            # para cada fila promediar para sacar la potencia
+                    if base == 1:
+                        fila_aux[0,1:] -= baseline(fila_aux[0,1:])       # calculamos la base y luego se la sacamos.
 
                     ltf_fil = np.vstack((ltf_fil,fila_aux))
 
-                    if opcion == 1:
-                        aux =[t1, np.mean(fila_aux[0,1:])]
-
-
+                    if opcion == 1:                                      # si piden calcular potencia
+                        aux = [fila_aux[0, 0], fila_aux[0, 1], fila_aux[0, 2], np.mean(fila_aux[0,3:])]
                         potencias = np.vstack((potencias, aux))
 
                     break
-
 
         else:
             continue
 
     if orden == "RA":
-        potencias2 = np.empty([len(potencias),2])
-        indices = np.argsort(RA_pos_FILTRADO)
-
-        for i in range(len(indices)):
-            potencias2[i,0] = RA_pos_FILTRADO[indices[i]]
-            potencias2[i,1] = potencias[indices[i],1]
-        potencias = potencias2
+        potencias = potencias[ potencias[:,1].argsort ]
 
     elif orden == "DEC":
-        potencias2 = np.empty([len(potencias),2])
-        indices = np.argsort(DEC_pos_FILTRADO)
-        for i in range(len(indices)):
-            potencias2[i,0] = DEC_pos_FILTRADO[indices[i]]
-            potencias2[i,1] = potencias[indices[i],1]
-        potencias = potencias2
+        potencias = potencias[ potencias[:,2].argsort ]
+
     elif orden == "MJD":
         pass
+
     else:
         print("Error debe ingresar una opcion válida. (MJD,DEC,RA)")
 
     if opcion == 0:
-        np.save("ltf_fil.npy",ltf_fil)
+        np.save("ltf_fil.npy", ltf_fil)
         return ltf_fil
     elif opcion == 1:
-        np.save("potencias.txt",potencias)
+        np.save("potencias.txt", potencias)
         return potencias
 
     else:
         "Error: se debe ingresar 0 para espectro o 1 para potencia"
-
-

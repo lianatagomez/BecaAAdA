@@ -24,19 +24,15 @@ def ordenMJD(filename,opcion,base,orden):
 
     # abrimos el archivo con las posiciones de apuntamiento
     pos_name = filename[0:len(filename)-4]+'.txt'
-    pos_file = open(pos_name, "r")
 
     MJD_pos = np.loadtxt(pos_name, usecols=0)   # guardamos los valores de MJD de .txt
-    RA_pos = np.loadtxt(pos_name, usecols=5)     # guardamos los valores de RA de .txt
+    RA_pos = np.loadtxt(pos_name, usecols=5)    # guardamos los valores de RA de .txt
     DEC_pos = np.loadtxt(pos_name, usecols=7)   # guardamos los valores de DEC de .txt
 
     b = os.path.getsize(filename)
     size = int(header[0].get("nbits"))          # del header saca el tamaño en bits
     pack = size/8
     espectros = (((b-header[1])/pack)/nchans)-1 # Calculo del total de espectos disponibles en# el FIL
-
-    RA_pos_FILTRADO = []
-    DEC_pos_FILTRADO = []
 
     #crear el array con las dimensiones y "rellenarlo" con los datos que estan en los archivos
     ltf_fil = np.empty([0,nchans+3])            # archivo de salida. Las columnas son: MJD, RA, DEC, y luego vienen los canales
@@ -49,23 +45,23 @@ def ordenMJD(filename,opcion,base,orden):
 
         if t1 > t0:                             # si t1 es mayor que to
 
-            for t2 in MJD_pos:                  # buscamos el t2 del .txt que le siga a t1
-                if t2 < t1:
+            for j in range(len(MJD_pos)):                  # buscamos el t2 del .txt que le siga a t1
+                if MJD_pos[i] < t1:
                     continue
-                if t2 > t1:
+                if MJD_pos[i] >= t1:
 
                     fila_aux = np.empty([1,nchans+3])    # creamos una fila auxiliar que sumar al archivo de salid
-                    fila_aux[0, 0] = t1                                         # en la primera columna guardamos el t del .fil
-                    fila_aux[0, 1] = RA_pos[np.argwhere(MJD_pos==t2)[0]][0]     # en la segunda columna guardamos el RA del .txt
-                    fila_axu[0, 2] = DEC_pos[np.argwhere(MJD_pos==t2) [0]][0]   # en la tercera columna guardamos el DEC del .txt
+                    fila_aux[0, 0] = MJD_pos[i]    # en la primera columna guardamos el t del .fil
+                    fila_aux[0, 1] = RA_pos[i]     # en la segunda columna guardamos el RA del .txt
+                    fila_axu[0, 2] = DEC_pos[i]    # en la tercera columna guardamos el DEC del .txt
 
                     for j in range(nchans):
                         fila_aux[0,j+3]= struct.unpack('f', f.read(pack))[0]    # cargamos las medidas en cada canal de frecuencia para ese instante
 
                     if base == 1:
-                        fila_aux[0,1:] -= baseline(fila_aux[0,1:])       # calculamos la base y luego se la sacamos.
+                        fila_aux[0, 1:] -= baseline(fila_aux[0, 1:])       # calculamos la base y luego se la sacamos.
 
-                    ltf_fil = np.vstack((ltf_fil,fila_aux))
+                    ltf_fil = np.vstack((ltf_fil, fila_aux))
 
                     if opcion == 1:                                      # si piden calcular potencia
                         aux = [fila_aux[0, 0], fila_aux[0, 1], fila_aux[0, 2], np.mean(fila_aux[0,3:])]

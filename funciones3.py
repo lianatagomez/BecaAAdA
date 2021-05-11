@@ -37,17 +37,17 @@ def ordenMJD(filename,opcion,base,orden):
 
     #crear el array con las dimensiones y "rellenarlo" con los datos que estan en los archivos
     ltf_fil = np.empty([0,nchans+3])            # archivo de salida. Las columnas son: MJD, RA, DEC, y luego vienen los canales
-    potencias = np.empty([0,2])                 # archivo de salida si piden potencia
+    potencias = np.empty([0,4])                 # archivo de salida si piden potencia
 
     t0 = MJD_pos[0]                             # primer valor de tiempo del .txt
     for i in range(espectros):                  # para cada instante de observación
         t_aux=str(time_file.readline())[0:26]   # sacamos el valor de tiempo del .ltf (dd/mm/yyyy)
         t1 = Time(t_aux, format='isot').mjd     # y lo pasamos a MJD
-        print(t0,t1)
+#        print(t0,t1)
         if t1 > t0:                             # si t1 es mayor que to
 
             for j in range(len(MJD_pos)):                  # buscamos el t2 del .txt que le siga a t1
-                print(t1,MJD_pos[j])
+#                print(t1,MJD_pos[j])
                 if MJD_pos[j] < t1:
                     continue
                 if MJD_pos[j] >= t1:
@@ -61,25 +61,24 @@ def ordenMJD(filename,opcion,base,orden):
                         fila_aux[0,k+3]= struct.unpack('f', f.read(pack))[0]    # cargamos las medidas en cada canal de frecuencia para ese instante
 
                     if base == 1:
-                        fila_aux[0, 1:] -= baseline(fila_aux[0, 1:])       # calculamos la base y luego se la sacamos.
+                        fila_aux[0, 3:] -= baseline(fila_aux[0, 3:])       # calculamos la base y luego se la sacamos.
 
                     ltf_fil = np.vstack((ltf_fil, fila_aux))
 
                     if opcion == 1:                                      # si piden calcular potencia
                         aux = [fila_aux[0, 0], fila_aux[0, 1], fila_aux[0, 2], np.mean(fila_aux[0,3:])]
-                        print(aux)
                         potencias = np.vstack((potencias, aux))
-
                     break
 
         else:
             continue
 
     if orden == "RA":
-        potencias = potencias[ potencias[:,1].argsort ]
+#        print(potencias)
+        potencias = potencias[np.argsort(potencias[:,1])]
 
     elif orden == "DEC":
-        potencias = potencias[ potencias[:,2].argsort ]
+        potencias = potencias[np.argsort(potencias[:,2])]
 
     elif orden == "MJD":
         pass
@@ -88,10 +87,10 @@ def ordenMJD(filename,opcion,base,orden):
         print("Error debe ingresar una opcion válida. (MJD,DEC,RA)")
 
     if opcion == 0:
-        np.save("ltf_fil.npy", ltf_fil)
+        np.save(filename[0:len(filename)-4] + "_espectro.npy", ltf_fil)
         return ltf_fil
     elif opcion == 1:
-        np.save("potencias.txt", potencias)
+        np.save(filename[0:len(filename)-4] + "_potencia.txt", potencias)
 
         return potencias
 
